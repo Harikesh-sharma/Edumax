@@ -6,6 +6,8 @@ import { useNavigate } from 'react-router-dom';
 
 const AdminUpload = () => {
     const navigate = useNavigate();
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
     const [formData, setFormData] = useState({
         title: '',
         author: '',
@@ -18,19 +20,13 @@ const AdminUpload = () => {
     const [status, setStatus] = useState(null); // 'success' | 'error'
     const [managedPdfs, setManagedPdfs] = useState([]);
 
-    const loadManagedPdfs = () => {
+    const loadManagedPdfs = async () => {
         try {
-            const defaultMockPdfs = [
-                { id: '1', title: 'Calculus I - Complete Notes', author: 'Dr. Smith', price: 500, locked: true, category: 'state' },
-                { id: '2', title: 'Introduction to React', author: 'Edumax Team', price: 0, locked: false, category: 'btech' },
-                { id: '3', title: 'Advanced Physics Vol. 1', author: 'Prof. Johnson', price: 1200, locked: true, category: '12th' },
-            ];
-
-            const deletedIds = JSON.parse(localStorage.getItem('edumax_deletedPdfIds') || '[]').map(String);
-            const visibleMockPdfs = defaultMockPdfs.filter(pdf => !deletedIds.includes(String(pdf.id)));
-            const uploadedPdfs = JSON.parse(localStorage.getItem('edumax_uploadedPdfs') || '[]');
-
-            setManagedPdfs([...uploadedPdfs, ...visibleMockPdfs]);
+            const response = await fetch(`${API_URL}/pdfs`);
+            if (response.ok) {
+                const data = await response.json();
+                setManagedPdfs(data);
+            }
         } catch (err) {
             console.error('Failed to load PDFs:', err);
         }
@@ -52,31 +48,21 @@ const AdminUpload = () => {
         }
     };
 
-    const handleDelete = (id) => {
+    const handleDelete = async (id) => {
         console.log('Admin: Attempting to delete PDF ID:', id);
         if (window.confirm('Are you sure you want to delete this PDF?')) {
             try {
-                const uploadedPdfs = JSON.parse(localStorage.getItem('edumax_uploadedPdfs') || '[]');
-                const isUploaded = uploadedPdfs.some(p => String(p.id) === String(id));
+                const response = await fetch(`${API_URL}/pdfs/${id}`, {
+                    method: 'DELETE'
+                });
 
-                console.log('Admin: isUploaded?', isUploaded);
-
-                if (isUploaded) {
-                    const updated = uploadedPdfs.filter(pdf => String(pdf.id) !== String(id));
-                    localStorage.setItem('edumax_uploadedPdfs', JSON.stringify(updated));
-                    console.log('Admin: Deleted from uploadedPdfs. Remaining:', updated.length);
+                if (response.ok) {
+                    console.log('Admin: Deleted from MongoDB');
+                    window.dispatchEvent(new CustomEvent('edumax-sync', { detail: { action: 'delete', id } }));
+                    loadManagedPdfs();
                 } else {
-                    const deletedIds = JSON.parse(localStorage.getItem('edumax_deletedPdfIds') || '[]');
-                    if (!deletedIds.includes(String(id))) {
-                        const newDeletedIds = [...deletedIds, String(id)];
-                        localStorage.setItem('edumax_deletedPdfIds', JSON.stringify(newDeletedIds));
-                        console.log('Admin: Added to deletedMockIds:', newDeletedIds);
-                    }
+                    alert('Failed to delete PDF');
                 }
-
-                // Dispatch sync event with data for better tracking
-                window.dispatchEvent(new CustomEvent('edumax-sync', { detail: { action: 'delete', id } }));
-                loadManagedPdfs();
             } catch (err) {
                 console.error('Admin: Delete failed:', err);
             }
@@ -88,75 +74,50 @@ const AdminUpload = () => {
         console.log('Admin: handleSubmit triggered');
 
         if (!file) {
-            console.error('Admin: No file selected');
             alert('Please select a PDF file first.');
-            return;
-        }
-
-        // LocalStorage limit is usually 5-10MB. Base64 adds ~33% overhead.
-        // We should limit files to ~3.5MB to stay safe.
-        if (file.size > 3.5 * 1024 * 1024) {
-            alert('File is too large for browser demo storage. Please use a PDF smaller than 3.5MB.');
             return;
         }
 
         setLoading(true);
         setStatus(null);
 
-        // Convert file to Base64
-        const reader = new FileReader();
-        reader.onload = () => {
-            const base64Data = reader.result;
+        try {
+            const data = new FormData();
+            data.append('file', file);
+            data.append('title', formData.title);
+            data.append('author', formData.author);
+            data.append('price', formData.price);
+            data.append('category', formData.category);
+            data.append('description', formData.description);
 
-            // Simulate API call delay
-            setTimeout(() => {
-                try {
-                    const newPdf = {
-                        id: Date.now().toString(),
-                        ...formData,
-                        fileName: file.name,
-                        fileData: base64Data, // Save the actual PDF content
-                        createdAt: new Date().toISOString(),
-                        locked: true
-                    };
+            const response = await fetch(`${API_URL}/pdfs`, {
+                method: 'POST',
+                body: data
+            });
 
-                    console.log('Admin: Saving new PDF with data (length):', base64Data.length);
+            if (response.ok) {
+                const savedPdf = await response.json();
+                console.log('Admin: Upload success:', savedPdf);
 
-                    const existingPdfs = JSON.parse(localStorage.getItem('edumax_uploadedPdfs') || '[]');
-                    const updatedPdfs = [newPdf, ...existingPdfs];
-                    localStorage.setItem('edumax_uploadedPdfs', JSON.stringify(updatedPdfs));
+                window.dispatchEvent(new CustomEvent('edumax-sync', {
+                    detail: { action: 'upload', title: savedPdf.title }
+                }));
 
-                    console.log('Admin: Storage updated. New count:', updatedPdfs.length);
-
-                    // Dispatch detailed sync event
-                    window.dispatchEvent(new CustomEvent('edumax-sync', {
-                        detail: { action: 'upload', title: newPdf.title }
-                    }));
-
-                    setLoading(false);
-                    setStatus('success');
-                    setFormData({ title: '', author: '', price: '', category: '', description: '' });
-                    setFile(null);
-
-                    console.log('Admin: Upload flow complete');
-
-                    setTimeout(() => setStatus(null), 3000);
-                } catch (err) {
-                    console.error('Admin: Upload failed (probably storage limit):', err);
-                    alert('Could not save PDF. The document might be too large for browser storage.');
-                    setLoading(false);
-                    setStatus('error');
-                }
-            }, 800);
-        };
-
-        reader.onerror = () => {
-            console.error('Admin: File reading failed');
-            alert('Failed to read the PDF file.');
+                setStatus('success');
+                setFormData({ title: '', author: '', price: '', category: '', description: '' });
+                setFile(null);
+                loadManagedPdfs();
+                setTimeout(() => setStatus(null), 3000);
+            } else {
+                throw new Error('Upload failed');
+            }
+        } catch (err) {
+            console.error('Admin: Upload failed:', err);
+            alert('Could not save PDF to MongoDB.');
+            setStatus('error');
+        } finally {
             setLoading(false);
-        };
-
-        reader.readAsDataURL(file);
+        }
     };
 
     return (
@@ -324,7 +285,7 @@ const AdminUpload = () => {
                                 </p>
                             ) : (
                                 managedPdfs.map((pdf) => (
-                                    <div key={pdf.id} style={{
+                                    <div key={pdf._id} style={{
                                         padding: 'var(--space-md)',
                                         borderBottom: '1px solid var(--glass-border)',
                                         display: 'flex',
@@ -349,7 +310,7 @@ const AdminUpload = () => {
                                             </p>
                                         </div>
                                         <button
-                                            onClick={() => handleDelete(pdf.id)}
+                                            onClick={() => handleDelete(pdf._id)}
                                             style={{
                                                 padding: '8px', background: 'transparent', border: 'none',
                                                 color: 'var(--error)', cursor: 'pointer', borderRadius: '50%',

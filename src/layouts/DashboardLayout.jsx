@@ -174,7 +174,20 @@ const DashboardLayout = ({ children, onAddNote }) => {
                             {username[0]?.toUpperCase()}
                         </div>
                         <div style={{ flex: 1 }}>
-                            <p style={{ fontSize: '0.9rem', fontWeight: '500' }}>{username}</p>
+                            <p style={{ fontSize: '0.9rem', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                                {username}
+                                {localStorage.getItem('role') === 'admin' && (
+                                    <span style={{
+                                        fontSize: '0.65rem',
+                                        background: 'var(--primary)',
+                                        color: 'white',
+                                        padding: '2px 6px',
+                                        borderRadius: '4px',
+                                        textTransform: 'uppercase',
+                                        letterSpacing: '0.5px'
+                                    }}>Admin</span>
+                                )}
+                            </p>
                         </div>
                     </div>
                     <Button

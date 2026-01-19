@@ -13,11 +13,12 @@ pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/b
 const PdfViewer = () => {
     const { id } = useParams();
     const navigate = useNavigate();
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
     const [numPages, setNumPages] = useState(null);
     const [pdfMetadata, setPdfMetadata] = useState(null);
     const [isPaid, setIsPaid] = useState(false);
     const [showPaymentModal, setShowPaymentModal] = useState(false);
-    const [blobUrl, setBlobUrl] = useState(null);
     const [metadataLoaded, setMetadataLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const isAdmin = localStorage.getItem('role') === 'admin';
@@ -56,71 +57,43 @@ const PdfViewer = () => {
         pdfjs.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjs.version}/pdf.worker.min.mjs`;
     }, []);
 
-    // Mock PDF for default files
-    const DEFAULT_MOCK_URL = 'https://raw.githubusercontent.com/mozilla/pdf.js/ba2edeae/web/compressed.tracemonkey-pldi-09.pdf';
-
     useEffect(() => {
         console.group('Viewer: Initialization');
 
-        const loadMetadata = () => {
+        const loadMetadata = async () => {
             console.log('Document ID:', id);
 
-            // Find the PDF in localStorage
-            const uploadedPdfs = JSON.parse(localStorage.getItem('edumax_uploadedPdfs') || '[]');
-            const defaultMockPdfs = [
-                { id: '1', title: 'Calculus I - Complete Notes', author: 'Dr. Smith', price: 500, locked: true, category: 'state' },
-                { id: '2', title: 'Introduction to React', author: 'Edumax Team', price: 0, locked: false, category: 'btech' },
-                { id: '3', title: 'Advanced Physics Vol. 1', author: 'Prof. Johnson', price: 1200, locked: true, category: '12th' },
-            ];
+            try {
+                // Fetch specific PDF from backend
+                const response = await fetch(`${API_URL}/pdfs`);
+                if (response.ok) {
+                    const pdfs = await response.json();
+                    const found = pdfs.find(p => String(p._id) === String(id));
 
-            const found = [...uploadedPdfs, ...defaultMockPdfs].find(p => String(p.id) === String(id));
+                    if (found) {
+                        console.log('Metadata found:', found.title);
+                        setPdfMetadata(found);
 
-            if (found) {
-                console.log('Metadata found:', found.title);
-                setPdfMetadata(found);
-
-                // If it's free, consider it "paid"
-                // IMPORTANT: We no longer auto-unlock for Admins so they can test the payment wall!
-                if (Number(found.price) === 0) {
-                    console.log('Document is free, unlocking all pages');
-                    setIsPaid(true);
-                }
-
-                // Convert Base64 data to Blob URL for stability
-                if (found.fileData && found.fileData.startsWith('data:application/pdf')) {
-                    try {
-                        console.log('Converting Base64 to Blob URL...');
-                        const base64Parts = found.fileData.split(',');
-                        const contentType = base64Parts[0].split(':')[1].split(';')[0];
-                        const byteCharacters = atob(base64Parts[1]);
-                        const byteNumbers = new Array(byteCharacters.length);
-                        for (let i = 0; i < byteCharacters.length; i++) {
-                            byteNumbers[i] = byteCharacters.charCodeAt(i);
+                        if (Number(found.price) === 0) {
+                            console.log('Document is free, unlocking all pages');
+                            setIsPaid(true);
                         }
-                        const byteArray = new Uint8Array(byteNumbers);
-                        const blob = new Blob([byteArray], { type: contentType });
-                        const url = URL.createObjectURL(blob);
-                        setBlobUrl(url);
-                        console.log('Blob URL created successfully.');
-                    } catch (e) {
-                        console.error('Viewer: Blob conversion failed', e);
+                    } else {
+                        console.error('Document not found in storage!');
                     }
                 }
-            } else {
-                console.error('Document not found in storage!');
+            } catch (err) {
+                console.error('Viewer: Failed to fetch metadata', err);
+            } finally {
+                setMetadataLoaded(true);
+                console.groupEnd();
             }
-            setMetadataLoaded(true);
-            console.groupEnd();
         };
 
         loadMetadata();
-
-        return () => {
-            if (blobUrl) URL.revokeObjectURL(blobUrl);
-        };
     }, [id, isAdmin]);
 
-    const pdfFile = blobUrl || DEFAULT_MOCK_URL;
+    const pdfFile = pdfMetadata?.fileId ? `${API_URL}/pdfs/file/${pdfMetadata.fileId}` : null;
 
     const onDocumentLoadSuccess = ({ numPages }) => {
         setNumPages(numPages);

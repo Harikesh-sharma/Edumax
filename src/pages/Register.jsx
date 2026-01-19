@@ -8,8 +8,8 @@ const Register = () => {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState(null);
 
-    // Replace this with your REAL Client ID from Google Cloud Console
-    const CLIENT_ID = "239419397396-9i9itvf1mcsu8h6fmkrv9945il801mqk.apps.googleusercontent.com";
+    // Use environment variable for the Client ID
+    const CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID;
 
     const parseJwt = (token) => {
         try {
@@ -34,7 +34,14 @@ const Register = () => {
                 const existingUser = users.find(u => u.email === userData.email);
 
                 const adminEmail = import.meta.env.VITE_ADMIN_EMAIL;
-                const role = userData.email === adminEmail ? 'admin' : 'user';
+                console.log("Admin config check - User Email:", userData.email, "Admin Email Config:", adminEmail);
+
+                // Robust comparison: lowercase and trim both
+                const userEmailClean = (userData.email || "").toLowerCase().trim();
+                const adminEmailClean = (adminEmail || "").toLowerCase().trim();
+
+                const role = adminEmailClean && userEmailClean === adminEmailClean ? 'admin' : 'user';
+                console.log("Assigned Role:", role);
 
                 const userInfo = {
                     id: userData.sub,

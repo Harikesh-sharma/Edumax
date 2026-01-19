@@ -7,6 +7,8 @@ import Button from '../components/Button';
 const PdfLibrary = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+
     const [pdfs, setPdfs] = useState([]);
     const [isSyncing, setIsSyncing] = useState(false);
     const isAdmin = localStorage.getItem('role') === 'admin';
@@ -15,50 +17,21 @@ const PdfLibrary = () => {
     const queryParams = new URLSearchParams(location.search);
     const categoryFilter = queryParams.get('category');
 
-    const loadPdfs = (manual = false) => {
+    const loadPdfs = async (manual = false) => {
         if (manual) setIsSyncing(true);
         console.group('Library: Sync Process');
 
         try {
-            // Mock data (Internal)
-            const defaultMockPdfs = [
-                { id: '1', title: 'Calculus I - Complete Notes', author: 'Dr. Smith', price: 500, locked: true, category: 'state' },
-                { id: '2', title: 'Introduction to React', author: 'Edumax Team', price: 0, locked: false, category: 'btech' },
-                { id: '3', title: 'Advanced Physics Vol. 1', author: 'Prof. Johnson', price: 1200, locked: true, category: '12th' },
-            ];
-
-            // 1. Load deleted mock IDs
-            const deletedIdsRaw = localStorage.getItem('edumax_deletedPdfIds');
-            const deletedIds = JSON.parse(deletedIdsRaw || '[]').map(String);
-            console.log('Library: Deleted Mock IDs:', deletedIds);
-
-            const visibleMockPdfs = defaultMockPdfs.filter(pdf => !deletedIds.includes(String(pdf.id)));
-
-            // 2. Load uploaded PDFs
-            const uploadedPdfsRaw = localStorage.getItem('edumax_uploadedPdfs');
-            const uploadedPdfs = JSON.parse(uploadedPdfsRaw || '[]');
-            console.log('Library: Raw Uploaded PDFs from storage:', uploadedPdfs);
-
-            // 3. Combine - Uploaded PDFs come LAST so they win in the Map if IDs conflict
-            const combined = [...visibleMockPdfs, ...uploadedPdfs];
-            const uniquePdfs = Array.from(new Map(combined.map(item => [String(item.id), item])).values());
-
-            console.log(`Library: Final Count: ${uniquePdfs.length} (Mocks: ${visibleMockPdfs.length}, Uploaded: ${uploadedPdfs.length})`);
-
-            // Sort by creation date (newest first) for uploaded ones
-            uniquePdfs.sort((a, b) => {
-                if (a.createdAt && b.createdAt) return new Date(b.createdAt) - new Date(a.createdAt);
-                if (a.createdAt) return -1;
-                if (b.createdAt) return 1;
-                return 0;
-            });
-
-            setPdfs(uniquePdfs);
+            const response = await fetch(`${API_URL}/pdfs`);
+            if (response.ok) {
+                const data = await response.json();
+                console.log(`Library: Fetched ${data.length} PDFs from MongoDB`);
+                setPdfs(data);
+            }
 
             if (manual) {
                 setTimeout(() => {
                     setIsSyncing(false);
-                    // alert('Library synchronized successfully!');
                 }, 600);
             }
         } catch (err) {
@@ -74,15 +47,12 @@ const PdfLibrary = () => {
 
         const handleSync = (e) => {
             console.log('Library: Sync signal received', e instanceof CustomEvent ? e.detail : 'Storage Event');
-            // Small delay to ensure localStorage has finished writing (just in case)
             setTimeout(loadPdfs, 100);
         };
 
-        window.addEventListener('storage', handleSync);
         window.addEventListener('edumax-sync', handleSync);
 
         return () => {
-            window.removeEventListener('storage', handleSync);
             window.removeEventListener('edumax-sync', handleSync);
         };
     }, []);
@@ -93,28 +63,21 @@ const PdfLibrary = () => {
         : pdfs;
 
     const handlePdfClick = (pdf) => {
-        navigate(`/pdf/${pdf.id}`);
+        navigate(`/pdf/${pdf._id}`);
     };
 
-    const deletePdf = (e, id) => {
+    const deletePdf = async (e, id) => {
         e.stopPropagation();
         if (window.confirm('Delete this PDF permanently?')) {
             try {
-                const uploadedPdfs = JSON.parse(localStorage.getItem('edumax_uploadedPdfs') || '[]');
-                const isUploaded = uploadedPdfs.some(p => String(p.id) === String(id));
+                const response = await fetch(`${API_URL}/pdfs/${id}`, {
+                    method: 'DELETE'
+                });
 
-                if (isUploaded) {
-                    const updated = uploadedPdfs.filter(pdf => String(pdf.id) !== String(id));
-                    localStorage.setItem('edumax_uploadedPdfs', JSON.stringify(updated));
-                } else {
-                    const deletedIds = JSON.parse(localStorage.getItem('edumax_deletedPdfIds') || '[]');
-                    if (!deletedIds.includes(String(id))) {
-                        localStorage.setItem('edumax_deletedPdfIds', JSON.stringify([...deletedIds, String(id)]));
-                    }
+                if (response.ok) {
+                    window.dispatchEvent(new CustomEvent('edumax-sync', { detail: { action: 'delete', id } }));
+                    loadPdfs();
                 }
-
-                window.dispatchEvent(new CustomEvent('edumax-sync', { detail: { action: 'delete', id } }));
-                loadPdfs();
             } catch (err) {
                 console.error('Delete failed:', err);
             }
@@ -122,13 +85,7 @@ const PdfLibrary = () => {
     };
 
     const resetLibrary = () => {
-        if (window.confirm('WARNING: This will delete ALL uploaded PDFs and restore defaults. Proceed?')) {
-            localStorage.removeItem('edumax_uploadedPdfs');
-            localStorage.removeItem('edumax_deletedPdfIds');
-            window.dispatchEvent(new CustomEvent('edumax-sync', { detail: { action: 'reset' } }));
-            loadPdfs();
-            alert('Library has been reset to defaults.');
-        }
+        alert('Library reset is handled by clearing MongoDB database manually or deleting individual items.');
     };
 
     return (
@@ -215,7 +172,7 @@ const PdfLibrary = () => {
 
                     {filteredPdfs.map((pdf) => (
                         <div
-                            key={pdf.id}
+                            key={pdf._id}
                             className="glass"
                             style={{
                                 padding: 'var(--space-md)',
@@ -234,7 +191,7 @@ const PdfLibrary = () => {
                             {/* Delete Button (Admins only) */}
                             {isAdmin && (
                                 <button
-                                    onClick={(e) => deletePdf(e, pdf.id)}
+                                    onClick={(e) => deletePdf(e, pdf._id)}
                                     title="Delete PDF"
                                     style={{
                                         position: 'absolute',
