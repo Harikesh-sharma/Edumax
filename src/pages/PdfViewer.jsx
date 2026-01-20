@@ -88,6 +88,8 @@ const PdfViewer = () => {
                         if (Number(found.price) === 0) {
                             console.log('Document is free, unlocking all pages');
                             setIsPaid(true);
+                        } else {
+                            console.log(`Document price is ${found.price}, checking purchase status...`);
                         }
                     } else {
                         console.error('Document not found in storage!');
@@ -246,6 +248,7 @@ const PdfViewer = () => {
                                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                             }}
                         >
+                            {console.log('Page State:', { page: index + 1, isPaid, locked: !isPaid && index > 0 })}
                             {/* Blur Overlay for unpaid pages > 1 */}
                             {!isPaid && index > 0 && (
                                 <div style={{
@@ -362,9 +365,21 @@ const PdfViewer = () => {
                                 </p>
 
                                 {/* Container for the external script */}
-                                <div id="razorpay-button-container" style={{ minHeight: '60px', display: 'flex', justifyContent: 'center' }}>
+                                <div id="razorpay-button-container" style={{ minHeight: '60px', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
                                     {/* Script will be injected here */}
                                     <div style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>Loading Payment Button...</div>
+                                </div>
+
+                                <div style={{ marginTop: '20px', borderTop: '1px dashed #eee', paddingTop: '15px' }}>
+                                    <p style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginBottom: '10px' }}>Admin/Testing only:</p>
+                                    <Button
+                                        variant="secondary"
+                                        size="sm"
+                                        onClick={handlePayment}
+                                        style={{ width: '100%', fontSize: '0.8rem' }}
+                                    >
+                                        Click here to Simulate Successful Payment
+                                    </Button>
                                 </div>
                             </div>
 
