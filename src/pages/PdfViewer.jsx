@@ -246,8 +246,8 @@ const PdfViewer = () => {
                                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
                             }}
                         >
-                            {/* Blur Overlay for unpaid users */}
-                            {!isPaid && (
+                            {/* Blur Overlay for unpaid pages > 1 */}
+                            {!isPaid && index > 0 && (
                                 <div style={{
                                     position: 'absolute',
                                     top: 0,
