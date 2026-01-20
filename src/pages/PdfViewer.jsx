@@ -22,16 +22,32 @@ const PdfViewer = () => {
     const [metadataLoaded, setMetadataLoaded] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [containerWidth, setContainerWidth] = useState(window.innerWidth);
+    const [pageWidth, setPageWidth] = useState(window.innerWidth > 800 ? 800 : window.innerWidth - 30);
+    const containerRef = React.useRef(null);
     const isAdmin = localStorage.getItem('role') === 'admin';
 
-    // Handle Responsive Resize
+    // Handle Responsive Resize with Ref
     useEffect(() => {
-        const handleResize = () => {
-            setContainerWidth(window.innerWidth);
+        const updateWidth = () => {
+            if (containerRef.current) {
+                const width = containerRef.current.clientWidth;
+                setContainerWidth(width);
+                // Calculate ideal page width (max 850px, otherwise full width minus padding)
+                const padding = width < 768 ? 20 : 60;
+                setPageWidth(Math.min(width - padding, 850));
+            }
         };
-        window.addEventListener('resize', handleResize);
-        return () => window.removeEventListener('resize', handleResize);
-    }, []);
+
+        updateWidth();
+        window.addEventListener('resize', updateWidth);
+        // Small delay to ensure DOM is ready
+        const timer = setTimeout(updateWidth, 100);
+
+        return () => {
+            window.removeEventListener('resize', updateWidth);
+            clearTimeout(timer);
+        };
+    }, [metadataLoaded]);
 
     // Check if previously purchased
     useEffect(() => {
@@ -230,15 +246,20 @@ const PdfViewer = () => {
             </div>
 
             {/* Main Viewer */}
-            <div style={{
-                flex: 1,
-                overflowY: 'auto',
-                display: 'flex',
-                justifyContent: 'center',
-                padding: containerWidth < 768 ? 'var(--space-sm)' : 'var(--space-lg)',
-                position: 'relative',
-                backgroundColor: '#525659' // Standard PDF reader background
-            }}>
+            <div
+                ref={containerRef}
+                style={{
+                    flex: 1,
+                    overflowY: 'auto',
+                    overflowX: 'hidden', // Extra protection against "spreading"
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    padding: containerWidth < 768 ? '10px' : '40px',
+                    position: 'relative',
+                    backgroundColor: '#525659'
+                }}
+            >
                 <Document
                     file={pdfFile}
                     onLoadSuccess={onDocumentLoadSuccess}
@@ -255,10 +276,10 @@ const PdfViewer = () => {
                             style={{
                                 marginBottom: '20px',
                                 position: 'relative',
-                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
+                                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+                                width: 'fit-content' // Ensure container matches PDF width
                             }}
                         >
-                            {console.log('Page State:', { page: index + 1, isPaid, locked: !isPaid && index > 0 })}
                             {/* Blur Overlay for unpaid pages > 1 */}
                             {!isPaid && index > 0 && (
                                 <div style={{
@@ -316,9 +337,9 @@ const PdfViewer = () => {
 
                             <Page
                                 pageNumber={index + 1}
-                                renderTextLayer={false} // Disable text selection layer
+                                renderTextLayer={false}
                                 renderAnnotationLayer={false}
-                                width={Math.min(containerWidth - (containerWidth < 768 ? 20 : 80), 850)}
+                                width={pageWidth}
                             />
                         </div>
                     ))}
