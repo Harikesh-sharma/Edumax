@@ -109,9 +109,10 @@ const AdminUpload = () => {
                 loadManagedPdfs();
                 setTimeout(() => setStatus(null), 3000);
             } else {
-                const errorData = await response.json().catch(() => ({ error: 'Unknown server error' }));
-                console.error('Admin: Server Error Response:', errorData);
-                throw new Error(errorData.error || errorData.details || 'Upload failed');
+                console.error(`Admin: Server Error ${response.status}:`, response.statusText);
+                const errorData = await response.json().catch(() => ({ error: 'Could not parse server error JSON' }));
+                console.error('Admin: Server Error Response Body:', errorData);
+                throw new Error(errorData.error || errorData.details || `Server returned ${response.status}`);
             }
         } catch (err) {
             console.error('Admin: Upload failed:', err);

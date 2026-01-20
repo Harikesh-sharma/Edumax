@@ -95,7 +95,10 @@ app.post('/api/pdfs', upload.single('file'), async (req, res) => {
 
         if (!title || !category) {
             console.error('❌ Missing required fields:', { title, category });
-            return res.status(400).json({ error: 'Title and Category are required' });
+            return res.status(400).json({
+                error: 'Title and Category are required',
+                details: `Received: title="${title}", category="${category}"`
+            });
         }
 
         const isLocked = (Number(price) || 0) > 0;
@@ -135,9 +138,10 @@ app.post('/api/pdfs', upload.single('file'), async (req, res) => {
 
     } catch (err) {
         console.error('❌ Upload Workflow Failure:', err);
+        // Ensure we always return JSON
         res.status(500).json({
-            error: 'Failed to process PDF upload',
-            details: err.message
+            error: 'Server failed to process upload',
+            details: err.message || 'Unknown error during file processing'
         });
     }
 });
