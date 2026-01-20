@@ -72,7 +72,8 @@ const storage = new CloudinaryStorage({
         folder: 'edumax_pdfs',
         format: async (req, file) => 'pdf', // force pdf
         public_id: (req, file) => `${Date.now()}-${file.originalname.replace(/\.[^/.]+$/, "")}`,
-        resource_type: 'raw' // Required for non-image files like PDF
+        resource_type: 'raw',
+        access_mode: 'public'
     },
 });
 
