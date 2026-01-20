@@ -147,10 +147,12 @@ const PdfViewer = () => {
                 purchases.push(id);
                 localStorage.setItem('edumax_purchases', JSON.stringify(purchases));
             }
+            console.log('✅ Payment simulation successful. Unlocking document:', id);
             setIsPaid(true);
             setShowPaymentModal(false);
             setIsLoading(false);
-        }, 2000);
+            alert("✨ Payment Successful! All pages are now unlocked.");
+        }, 1500);
     };
 
     // Prevent right click, print, and common save/inspect shortcuts
